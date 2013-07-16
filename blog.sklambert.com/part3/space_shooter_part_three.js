@@ -1,19 +1,13 @@
 /***************
- * PART TWO - Create the player controlled ship and it's
- * properties (move and shoot)
+ * PART THREE - Create the enemy ships
  ***************/
 
 /* NOTES TO REMEMBER
- * 1. Drawing to the canvas is expensive. Try to reuse as much as the image as you can for each frame.
+ * 1. Remeber to think ahead when developing a game to what future changes will do and account for them.
  */
  
 /* RESOURCES
- * 1. http://gamedev.tutsplus.com/tutorials/implementation/object-pools-help-you-reduce-lag-in-resource-intensive-games/
- * 2. http://gameprogrammingpatterns.com/object-pool.html
- * 3. http://www.slideshare.net/ernesto.jimenez/5-tips-for-your-html5-games
- * 4. http://www.kontain.com/fi/entries/94636/ (quote on performace)
- * 5. http://code.bytespider.eu/post/21438674255/dirty-rectangles
- * 6. http://www.html5rocks.com/en/tutorials/canvas/performance/
+ * 1. http://gamedev.tutsplus.com/tutorials/implementation/quick-tip-the-oop-principle-of-coupling/
  */
 
 // For showing FPS

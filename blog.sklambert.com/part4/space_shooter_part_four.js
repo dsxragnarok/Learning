@@ -1,19 +1,14 @@
 /***************
- * PART TWO - Create the player controlled ship and it's
- * properties (move and shoot)
+ * PART FOUR - Collision detection
  ***************/
 
 /* NOTES TO REMEMBER
- * 1. Drawing to the canvas is expensive. Try to reuse as much as the image as you can for each frame.
+ * 1. Reducing the number of collision checks is a far better imporvement then just optimizing the collision detection algorithm.
  */
  
 /* RESOURCES
- * 1. http://gamedev.tutsplus.com/tutorials/implementation/object-pools-help-you-reduce-lag-in-resource-intensive-games/
- * 2. http://gameprogrammingpatterns.com/object-pool.html
- * 3. http://www.slideshare.net/ernesto.jimenez/5-tips-for-your-html5-games
- * 4. http://www.kontain.com/fi/entries/94636/ (quote on performace)
- * 5. http://code.bytespider.eu/post/21438674255/dirty-rectangles
- * 6. http://www.html5rocks.com/en/tutorials/canvas/performance/
+ * 1. http://devmag.org.za/2009/04/13/basic-collision-detection-in-2d-part-1/
+ * 2. http://gamedev.tutsplus.com/tutorials/implementation/quick-tip-use-quadtrees-to-detect-likely-collisions-in-2d-space/
  */
 
 // For showing FPS
@@ -103,10 +98,16 @@ function Drawable() {
 	this.speed = 0;
 	this.canvasWidth = 0;
 	this.canvasHeight = 0;
+	this.collidableWith = "";
+	this.isColliding = false;
+	this.type = "";
 	
 	// Define abstract function to be implemented in child objects
 	this.draw = function() {};
 	this.move = function() {};
+	this.isCollidableWith = function(object) {
+		return (this.collidableWith === object.type);
+	};
 }
 
 /**
@@ -159,6 +160,8 @@ function Pool(maxSize) {
 				var bullet = new Bullet("bullet");
 				bullet.init(0, 0, imageRepository.bullet.width,
 							imageRepository.bullet.height);
+				bullet.collidableWith = "enemy";
+				bullet.type = "bullet";
 				pool[i] = bullet;
 			}
 		}
@@ -177,11 +180,25 @@ function Pool(maxSize) {
 				var bullet = new Bullet("enemyBullet");
 				bullet.init(0, 0, imageRepository.enemyBullet.width,
 							imageRepository.enemyBullet.height);
+				bullet.collidableWith = "ship";
+				bullet.type = "enemyBullet";
 				pool[i] = bullet;
 			}
 		}
 	
 		
+	};
+	
+	this.getPool = function() {
+		var obj = [];
+		for (var i = 0; i < size; i++)
+		{
+			if (pool[i].alive)
+			{
+				obj.push(pool[i]);
+			}
+		}
+		return obj;
 	};
 	
 	/*
@@ -234,6 +251,8 @@ function Enemy() {
 	var percentFire = .01;
 	var chance = 0;
 	this.alive = false;
+	this.collidableWith = "bullet";
+	this.type = "enemy";
 	
 	/*
 	 * Sets the Enemy values
@@ -270,12 +289,20 @@ function Enemy() {
 			this.speedX = -this.speed;
 		}
 		
-		this.context.drawImage(imageRepository.enemy, this.x, this.y);
+		if( !this.isColliding ) {
+			this.context.drawImage(imageRepository.enemy, this.x, this.y);
 		
-		// Enemy has a chance to shoot every movement
-		chance = Math.floor(Math.random() * 101);
-		if (chance / 100 < percentFire) {
-			this.fire();
+		
+			// Enemy has a chance to shoot every movement
+			chance = Math.floor(Math.random() * 101);
+			if (chance / 100 < percentFire) {
+				this.fire();
+			}
+			
+			return false;
+		}
+		else {
+			return true;
 		}
 	};
 	
@@ -296,6 +323,7 @@ function Enemy() {
 		this.speedX = 0;
 		this.speedY = 0;
 		this.alive = false;
+		this.isColliding = false;
 	};
 }
 Enemy.prototype = new Drawable();
@@ -327,7 +355,11 @@ function Bullet(object) {
 	 	this.context.clearRect(this.x-1, this.y-1, this.width+1, this.height+1);
 	 	this.y -= this.speed;
 	 	
-	 	if( self === "bullet" && this.y <= 0 - this.height ) {
+	 	if( this.isColliding )
+	 	{
+	 		return true;
+	 	}
+	 	else if( self === "bullet" && this.y <= 0 - this.height ) {
 	 		return true;
 	 	}
 	 	else if( self === "enemyBullet" && this.y >= this.canvasHeight ) {
@@ -354,6 +386,7 @@ function Bullet(object) {
 	 	this.y = 0;
 	 	this.speed = 0;
 	 	this.alive = false;
+	 	this.isColliding = false;
 	 };
 }
 // Set Bullet to inherit properties from Drawable
@@ -369,8 +402,10 @@ function Ship() {
 	this.bulletPool = new Pool(30);
 	this.bulletPool.init("bullet");
 	
-	var fireRate = 15;
+	var fireRate = 9;
 	var counter = 0;
+	this.isColliableWith = "enemyBullet";
+	this.type = "ship";
 	
 	this.draw = function() {
 		this.context.drawImage(imageRepository.spaceship, this.x, this.y);
@@ -408,10 +443,13 @@ function Ship() {
 			}
 		
 			// Finish by redrawing the ship
-			this.draw();
+			if( !this.isColliding )
+			{
+				this.draw();
+			}
 		}
 		
-		if (KEY_STATUS.space && counter >= fireRate) {
+		if (KEY_STATUS.space && counter >= fireRate && !this.isColliding) {
 			this.fire();
 			counter = 0;
 		}
@@ -502,6 +540,9 @@ function Game() {
 			this.enemyBulletPool = new Pool(50);
 			this.enemyBulletPool.init("enemyBullet");
 			
+			// Start QuadTree
+			this.quadTree = new QuadTree({x:0, y:0, width: this.mainCanvas.width,
+				height: this.mainCanvas.height});
 							
 			return true;
 		} else {
@@ -516,6 +557,29 @@ function Game() {
 	};
 }
 
+function detectCollision() {
+	var objects = [];
+	game.quadTree.getAllObjects(objects);
+	
+	for (var x = 0, len = objects.length; x < len; x++) {
+		game.quadTree.findObjects(obj = [], objects[x]);
+		
+		for (y = 0, length = obj.length; y < length; y++) {
+			// DETECT COLLISION ALGORITHM
+			if ( objects[x].collidableWith === obj[y].type &&
+				objects[x].x < obj[y].x + obj[y].width &&
+					objects[x].x + objects[x].width > obj[y].x &&
+					objects[x].y < obj[y].y + obj[y].height &&
+				objects[x].y + objects[x].height > obj[y].y)
+			{
+				objects[x].isColliding = true;
+				obj[y].isColliding = true;
+			}
+		}
+	}
+}
+
+
 /**
   * The animation loop. Calls the requestAnimationFrame shim to optimize the game
   * loop and draws all the game objects. This function must be a global function
@@ -526,6 +590,15 @@ function animate() {
 	elapsed = thisFrame - lastFrame;
 	lastFrame = thisFrame;
 	var span = document.getElementById('fps-text').innerHTML = avgFramerate;
+	
+	// Insert objects into quadtree
+	game.quadTree.clear();
+	game.quadTree.insert(game.ship);
+	game.quadTree.insert(game.ship.bulletPool.getPool());
+	game.quadTree.insert(game.enemyPool.getPool());
+	game.quadTree.insert(game.enemyBulletPool.getPool());
+	
+	detectCollision();
 	
 	requestAnimFrame( animate );
 	game.background.draw();
